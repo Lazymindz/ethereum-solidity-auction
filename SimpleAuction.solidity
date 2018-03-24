@@ -1,0 +1,104 @@
+pragma solidity ^0.4.0;
+
+contract SimpleAuction {
+
+// parameters for the auction
+address public beneficary;
+uint public auctionStart;
+uint public biddingTime;
+
+//Current State of the auction
+address public highestBidder;
+uint public highestBid;
+
+// Allowed withdrawls of previous bids
+mapping(address => uint) pendingReturns;
+
+//set to true to stop from further changes to the auction;
+bool ended;
+
+//If there are events that need to be triggered based on changes;
+event HighestBidIncreased(address bidder, uint amount);
+event AuctionEnded(address winner, uint amount);
+
+// Comments can be shown when interacting as below
+
+/// create an auction with `_biddingTime`
+/// seconds on behalf of the address
+/// Bidding address `_beneficiary`
+function SimpleAuction(
+    uint _biddingTime,
+    address _beneficiary)
+    {
+
+     beneficary = _beneficiary;
+     biddingTime = _biddingTime;
+     auctionStart = now;
+
+    }
+
+/// Bidding for the auction. Value will be refund if the bid is not success
+function bid() payable {
+    // no inputs needed as all the variables are already a part of the transaction
+    // payable is required for function receiving Ether
+    if (now > auctionStart + biddingTime) {
+        // revert the call if the bidding is over
+        throw;
+    }
+
+    if (msg.value <= highestBid) {
+        //dont accept the money as it is less
+        throw;
+    }
+
+    if (highestBidder !=0) {
+        pendingReturns[highestBidder] += highestBid;
+    }
+
+    highestBidder = msg.sender;
+    highestBid = msg.value;
+
+    HighestBidIncreased(msg.sender, msg.value);
+
+}
+
+/// withdraw a bid that was over bid
+function withdraw() returns (bool) {
+    var amount = pendingReturns[msg.sender];
+    if (amount > 0) {
+        pendingReturns[msg.sender] = 0;
+
+        if (!msg.sender.send(amount)) {
+            pendingReturns[msg.sender] =  amount;
+        return false;
+        }
+    }
+    return true;
+}
+
+/// ending the auction and sending the highestbid
+function auctionEnd() {
+    // done in 3 steps that are sequential
+    // 1. Check conditions
+    // 2. Carryout actions
+    // 3. Interact with other contracts
+
+    // 1. conditions
+    if (now <= auctionStart + biddingTime) {
+        throw;
+    }
+
+    if (ended) {
+        throw;
+    }
+
+    // 2. actions
+    ended = true;
+    AuctionEnded(highestBidder, highestBid);
+
+    // 3. Interaction
+    if (!beneficary.send(highestBid)) {
+        throw;
+    }
+}
+}
